@@ -5,30 +5,16 @@ use ratatui::{
     DefaultTerminal,
     crossterm::event::{self, Event, KeyCode},
     prelude::*,
-    style::palette::tailwind::{self, Palette},
-    widgets::*,
+    widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use tokio::{sync::mpsc, time::interval};
 
-use crate::util::HostStats;
+use crate::{
+    tui::{host_detail::HostDetail, host_overview::HostOverview},
+    util::HostStats,
+};
 
 const INTERVAL: u64 = 2;
-
-const PALETTES: [Palette; 13] = [
-    tailwind::GREEN,
-    tailwind::EMERALD,
-    tailwind::TEAL,
-    tailwind::CYAN,
-    tailwind::SKY,
-    tailwind::BLUE,
-    tailwind::INDIGO,
-    tailwind::VIOLET,
-    tailwind::PURPLE,
-    tailwind::FUCHSIA,
-    tailwind::PINK,
-    tailwind::ROSE,
-    tailwind::RED,
-];
 
 pub enum AppAction {
     Input(Event),
@@ -37,6 +23,7 @@ pub enum AppAction {
     StatsFetched(String, HostStats),
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct HostState {
     pub name: String,
     pub status: String,
@@ -44,60 +31,23 @@ pub struct HostState {
     pub stats: Option<HostStats>,
     pub prev_cpu_total: u64,
     pub prev_cpu_idle: u64,
-    pub cpu_usage: f64,
-    pub mem_usage: f64,
-    pub disk_usage: f64,
+    pub cpu_usage: Vec<f64>,
+    pub mem_total: u64,
+    pub mem_used: Vec<u64>,
+    pub disk_total: u64,
+    pub disk_used: u64,
+    pub prev_net_rx: u64,
+    pub prev_net_tx: u64,
+    pub net_rx_rate: Vec<f64>,
+    pub net_tx_rate: Vec<f64>,
+    pub process_scroll: usize,
 }
 
 pub struct App {
     pub running: bool,
     pub hosts: Vec<HostState>,
-}
-
-pub struct MetricGauge<'a> {
-    percentage: f64,
-    gauge: LineGauge<'a>,
-    color: Color,
-}
-
-impl<'a> MetricGauge<'a> {
-    fn get_colors(percentage: f64) -> (Color, Color) {
-        let num_segments = PALETTES.len();
-        let segment_index = (percentage / 100.0 * num_segments as f64)
-            .floor()
-            .min(num_segments as f64 - 1.0) as usize;
-
-        let palette = &PALETTES[segment_index];
-        (palette.c500, palette.c900)
-    }
-
-    pub fn new(label: &str, percentage: f64) -> Self {
-        let (filled_color, unfilled_color) = Self::get_colors(percentage);
-        let gauge = LineGauge::default()
-            .filled_symbol("⣿")
-            .unfilled_symbol("⣿")
-            .filled_style(Style::default().fg(filled_color))
-            .unfilled_style(Style::default().fg(unfilled_color))
-            .ratio(percentage.clamp(0.0, 100.0) / 100.0)
-            .label(format!("{}: ", label));
-        Self {
-            percentage,
-            gauge,
-            color: filled_color,
-        }
-    }
-}
-
-impl<'a> Widget for MetricGauge<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let gauge_layout = Layout::horizontal([Constraint::Min(0), Constraint::Length(6)]);
-        let [gauge_area_1, gauge_area_2] = area.layout(&gauge_layout);
-        self.gauge.render(gauge_area_1, buf);
-
-        let percentage_text = format!("{:.1}%", self.percentage);
-        let span = Span::styled(percentage_text, Style::default().fg(self.color).bold());
-        span.render(gauge_area_2, buf);
-    }
+    pub focused_host: usize,
+    pub host_scroll: usize,
 }
 
 impl App {
@@ -109,15 +59,11 @@ impl App {
                 .map(|name| HostState {
                     name,
                     status: "Connecting...".to_string(),
-                    session: None,
-                    stats: None,
-                    prev_cpu_total: 0,
-                    prev_cpu_idle: 0,
-                    cpu_usage: 0.0,
-                    mem_usage: 0.0,
-                    disk_usage: 0.0,
+                    ..Default::default()
                 })
                 .collect(),
+            focused_host: 0,
+            host_scroll: 0,
         }
     }
 
@@ -141,7 +87,6 @@ impl App {
                             ))
                             .await;
 
-                        // Fetch initial stats immediately after connecting
                         if let Ok(stats) = HostStats::fetch(session).await {
                             let _ = tx.send(AppAction::StatsFetched(host_name, stats)).await;
                         }
@@ -158,7 +103,6 @@ impl App {
         let tx_event = tx.clone();
         tokio::spawn(async move {
             loop {
-                // Poll for events to avoid blocking indefinitely
                 if event::poll(Duration::from_millis(100)).unwrap_or(false)
                     && let Ok(ev) = event::read()
                     && tx_event.send(AppAction::Input(ev)).await.is_err()
@@ -218,10 +162,38 @@ impl App {
     fn update(&mut self, action: AppAction) {
         match action {
             AppAction::Input(event) => {
-                if let Event::Key(key) = event
-                    && let KeyCode::Char('q') = key.code
-                {
-                    self.running = false;
+                if let Event::Key(key) = event {
+                    match key.code {
+                        KeyCode::Char('q') => self.running = false,
+                        KeyCode::Tab => {
+                            if !self.hosts.is_empty() {
+                                self.focused_host = (self.focused_host + 1) % self.hosts.len();
+                            }
+                        }
+                        KeyCode::BackTab => {
+                            if !self.hosts.is_empty() {
+                                if self.focused_host == 0 {
+                                    self.focused_host = self.hosts.len() - 1;
+                                } else {
+                                    self.focused_host -= 1;
+                                }
+                            }
+                        }
+                        KeyCode::Char('j') | KeyCode::Down => {
+                            if let Some(host) = self.hosts.get_mut(self.focused_host)
+                                && let Some(stats) = &host.stats
+                                && host.process_scroll < stats.processes.len().saturating_sub(1)
+                            {
+                                host.process_scroll = host.process_scroll.saturating_add(1);
+                            }
+                        }
+                        KeyCode::Char('k') | KeyCode::Up => {
+                            if let Some(host) = self.hosts.get_mut(self.focused_host) {
+                                host.process_scroll = host.process_scroll.saturating_sub(1);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             AppAction::Connected(name, session) => {
@@ -241,21 +213,30 @@ impl App {
                         let total_diff = stats.cpu_total.saturating_sub(host.prev_cpu_total);
                         let idle_diff = stats.cpu_idle.saturating_sub(host.prev_cpu_idle);
                         if total_diff > 0 {
-                            host.cpu_usage = 100.0 * (1.0 - (idle_diff as f64 / total_diff as f64));
+                            let usage = 100.0 * (1.0 - (idle_diff as f64 / total_diff as f64));
+                            host.cpu_usage.push(usage);
                         }
                     }
                     host.prev_cpu_total = stats.cpu_total;
                     host.prev_cpu_idle = stats.cpu_idle;
 
-                    if stats.mem_total > 0 {
-                        let used = stats.mem_total.saturating_sub(stats.mem_available);
-                        host.mem_usage = 100.0 * (used as f64 / stats.mem_total as f64);
-                    }
+                    host.mem_total = stats.mem_total;
+                    let used = stats.mem_total.saturating_sub(stats.mem_available);
+                    host.mem_used.push(used);
 
-                    if stats.disk_total > 0 {
-                        host.disk_usage =
-                            100.0 * (stats.disk_used as f64 / stats.disk_total as f64);
+                    host.disk_total = stats.disk_total;
+                    host.disk_used = stats.disk_used;
+
+                    if host.prev_net_rx > 0 {
+                        let rx_rate = (stats.net_rx.saturating_sub(host.prev_net_rx)) as f64
+                            / INTERVAL as f64;
+                        let tx_rate = (stats.net_tx.saturating_sub(host.prev_net_tx)) as f64
+                            / INTERVAL as f64;
+                        host.net_rx_rate.push(rx_rate);
+                        host.net_tx_rate.push(tx_rate);
                     }
+                    host.prev_net_rx = stats.net_rx;
+                    host.prev_net_tx = stats.net_tx;
 
                     host.stats = Some(stats);
                 }
@@ -264,76 +245,49 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
+        let main_layout =
+            Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)])
+                .split(frame.area());
+
+        let host_area = main_layout[0];
+        let item_height = 8;
+        let visible_count = (host_area.height as usize / item_height).max(1);
+
+        let mut scroll = self.host_scroll;
+        if self.focused_host < scroll {
+            scroll = self.focused_host;
+        } else if self.focused_host >= scroll + visible_count {
+            scroll = self.focused_host - visible_count + 1;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
-                self.hosts
-                    .iter()
-                    .map(|_| Constraint::Length(12))
+                (0..visible_count)
+                    .map(|_| Constraint::Length(item_height as u16))
                     .collect::<Vec<_>>(),
             )
-            .split(frame.area());
+            .split(host_area);
 
-        for (i, host) in self.hosts.iter().enumerate() {
-            let color = match host.status.as_str() {
-                "Connected" => Color::Green,
-                s if s.starts_with("Failed") => Color::Red,
-                _ => Color::Yellow,
-            };
-
-            let block = Block::default()
-                .title(format!(" {} ", host.name))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(color));
-
-            let inner_rect = block.inner(chunks[i]);
-            frame.render_widget(block, chunks[i]);
-
-            let inner_layout = Layout::vertical([
-                Constraint::Length(1), // Info line
-                Constraint::Length(1), // CPU Gauge
-                Constraint::Length(1), // RAM Gauge
-                Constraint::Length(1), // Disk Gauge
-                Constraint::Length(1), // Failed units header
-                Constraint::Min(0),    // Failed units list
-            ])
-            .split(inner_rect);
-
-            let uptime_info = if let Some(stats) = &host.stats {
-                format!("IP: {} | Uptime: {}", stats.ip_address, stats.uptime)
-            } else {
-                "".to_string()
-            };
-
-            let info_line = Paragraph::new(format!("Status: {} | {}", host.status, uptime_info));
-            frame.render_widget(info_line, inner_layout[0]);
-
-            if host.session.is_some() {
-                let cpu_gauge = MetricGauge::new("CPU", host.cpu_usage);
-                frame.render_widget(cpu_gauge, inner_layout[1]);
-
-                let mem_gauge = MetricGauge::new("RAM", host.mem_usage);
-                frame.render_widget(mem_gauge, inner_layout[2]);
-
-                let disk_gauge = MetricGauge::new("Disk", host.disk_usage);
-                frame.render_widget(disk_gauge, inner_layout[3]);
-
-                if let Some(stats) = &host.stats {
-                    let header = Paragraph::new(Span::styled(
-                        format!("Failed Units ({}):", stats.failed_units.len()),
-                        Style::default().fg(Color::Red).bold(),
-                    ));
-                    frame.render_widget(header, inner_layout[4]);
-
-                    let items: Vec<ListItem> = stats
-                        .failed_units
-                        .iter()
-                        .map(|u| ListItem::new(format!("  • {}", u)))
-                        .collect();
-                    let list = List::new(items);
-                    frame.render_widget(list, inner_layout[5]);
-                }
+        for i in 0..visible_count {
+            let host_idx = scroll + i;
+            if let Some(host) = self.hosts.get(host_idx) {
+                let focused = host_idx == self.focused_host;
+                frame.render_widget(HostOverview::new(host, focused), chunks[i]);
             }
+        }
+
+        if self.hosts.len() > visible_count {
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"));
+            let mut scrollbar_state = ScrollbarState::new(self.hosts.len()).position(scroll);
+            frame.render_stateful_widget(scrollbar, host_area, &mut scrollbar_state);
+        }
+
+        if let Some(host) = self.hosts.get(self.focused_host) {
+            frame.render_widget(HostDetail::new(host), main_layout[1]);
         }
     }
 }

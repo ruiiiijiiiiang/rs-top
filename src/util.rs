@@ -8,8 +8,23 @@ const CPU_CMD: &str = "cat /proc/stat | head -n 1";
 const UPTIME_CMD: &str = "cat /proc/uptime";
 const DISK_CMD: &str = "df -B1 / | tail -n 1";
 const IP_CMD: &str = "echo $SSH_CONNECTION";
+const LOAD_AVG_CMD: &str = "cat /proc/loadavg";
+const NET_CMD: &str = "cat /proc/net/dev";
+const TOP_CMD: &str = "top -bn1 -w 512 | head -n 57 | tail -n 51";
 const FAILED_UNITS_CMD: &str =
     "systemctl list-units --state=failed --no-legend --plain | awk '{print $1}'";
+
+pub fn format_bytes(bytes: f64) -> (f64, &'static str) {
+    if bytes >= 1024.0 * 1024.0 * 1024.0 {
+        (bytes / (1024.0 * 1024.0 * 1024.0), "G")
+    } else if bytes >= 1024.0 * 1024.0 {
+        (bytes / (1024.0 * 1024.0), "M")
+    } else if bytes >= 1024.0 {
+        (bytes / 1024.0, "K")
+    } else {
+        (bytes, "B")
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct HostStats {
@@ -19,8 +34,12 @@ pub struct HostStats {
     pub cpu_idle: u64,
     pub disk_total: u64,
     pub disk_used: u64,
+    pub load_avg: (f64, f64, f64),
+    pub net_rx: u64,
+    pub net_tx: u64,
     pub uptime: String,
     pub ip_address: String,
+    pub processes: Vec<String>,
     pub failed_units: Vec<String>,
 }
 
@@ -32,6 +51,9 @@ impl HostStats {
             UPTIME_CMD,
             DISK_CMD,
             IP_CMD,
+            LOAD_AVG_CMD,
+            NET_CMD,
+            TOP_CMD,
             FAILED_UNITS_CMD,
         ];
 
@@ -58,6 +80,15 @@ impl HostStats {
         }
         if let Some(out) = sections.next() {
             stats.parse_ip(out.trim());
+        }
+        if let Some(out) = sections.next() {
+            stats.parse_load_avg(out.trim());
+        }
+        if let Some(out) = sections.next() {
+            stats.parse_net(out.trim());
+        }
+        if let Some(out) = sections.next() {
+            stats.parse_processes(out.trim());
         }
         if let Some(out) = sections.next() {
             stats.parse_failed_units(out.trim());
@@ -140,6 +171,39 @@ impl HostStats {
             .nth(2)
             .unwrap_or("Unknown")
             .to_string();
+    }
+
+    fn parse_load_avg(&mut self, loadavg_out: &str) {
+        let parts: Vec<&str> = loadavg_out.split_whitespace().collect();
+        if parts.len() >= 3 {
+            self.load_avg = (
+                parts[0].parse().unwrap_or(0.0),
+                parts[1].parse().unwrap_or(0.0),
+                parts[2].parse().unwrap_or(0.0),
+            );
+        }
+    }
+
+    fn parse_net(&mut self, net_out: &str) {
+        let mut rx: u64 = 0;
+        let mut tx: u64 = 0;
+        for line in net_out.lines().skip(2) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 10 && !parts[0].starts_with("lo") {
+                rx += parts[1].parse().unwrap_or(0);
+                tx += parts[9].parse().unwrap_or(0);
+            }
+        }
+        self.net_rx = rx;
+        self.net_tx = tx;
+    }
+
+    fn parse_processes(&mut self, top_out: &str) {
+        self.processes = top_out
+            .lines()
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
     }
 
     fn parse_failed_units(&mut self, failed_units_out: &str) {
