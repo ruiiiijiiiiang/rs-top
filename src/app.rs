@@ -10,7 +10,7 @@ use ratatui::{
 };
 use tokio::{sync::mpsc, time::interval};
 
-use crate::util::{HostStats, fetch_stats};
+use crate::util::HostStats;
 
 const INTERVAL: u64 = 2;
 
@@ -127,7 +127,6 @@ impl App {
 
         let (tx, rx) = mpsc::channel(100);
 
-        // Spawn connection tasks for each host
         for host in &self.hosts {
             let host_name = host.name.clone();
             let tx = tx.clone();
@@ -143,7 +142,7 @@ impl App {
                             .await;
 
                         // Fetch initial stats immediately after connecting
-                        if let Ok(stats) = fetch_stats(session).await {
+                        if let Ok(stats) = HostStats::fetch(session).await {
                             let _ = tx.send(AppAction::StatsFetched(host_name, stats)).await;
                         }
                     }
@@ -156,7 +155,6 @@ impl App {
             });
         }
 
-        // Spawn event forwarding task
         let tx_event = tx.clone();
         tokio::spawn(async move {
             loop {
@@ -184,16 +182,13 @@ impl App {
         mut rx: mpsc::Receiver<AppAction>,
     ) -> Result<(), Box<dyn Error>> {
         let mut stats_interval = interval(Duration::from_secs(INTERVAL));
-        // Skip the first tick since it happens immediately and we trigger initial stats in the connection task
         stats_interval.tick().await;
 
         loop {
             tokio::select! {
-                // Receive and process messages from background tasks
                 Some(action) = rx.recv() => {
                     self.update(action);
                 }
-                // Periodic stats fetching
                 _ = stats_interval.tick() => {
                     for host in &self.hosts {
                         if let Some(session) = &host.session {
@@ -201,7 +196,7 @@ impl App {
                             let host_name = host.name.clone();
                             let tx = tx.clone();
                             tokio::spawn(async move {
-                                if let Ok(stats) = fetch_stats(session).await {
+                                if let Ok(stats) = HostStats::fetch(session).await {
                                     let _ = tx.send(AppAction::StatsFetched(host_name, stats)).await;
                                 }
                             });
@@ -242,7 +237,6 @@ impl App {
             }
             AppAction::StatsFetched(name, stats) => {
                 if let Some(host) = self.hosts.iter_mut().find(|h| h.name == name) {
-                    // CPU calculation
                     if host.prev_cpu_total > 0 {
                         let total_diff = stats.cpu_total.saturating_sub(host.prev_cpu_total);
                         let idle_diff = stats.cpu_idle.saturating_sub(host.prev_cpu_idle);
@@ -253,13 +247,11 @@ impl App {
                     host.prev_cpu_total = stats.cpu_total;
                     host.prev_cpu_idle = stats.cpu_idle;
 
-                    // Memory calculation
                     if stats.mem_total > 0 {
                         let used = stats.mem_total.saturating_sub(stats.mem_available);
                         host.mem_usage = 100.0 * (used as f64 / stats.mem_total as f64);
                     }
 
-                    // Disk calculation
                     if stats.disk_total > 0 {
                         host.disk_usage =
                             100.0 * (stats.disk_used as f64 / stats.disk_total as f64);
@@ -277,7 +269,7 @@ impl App {
             .constraints(
                 self.hosts
                     .iter()
-                    .map(|_| Constraint::Length(7))
+                    .map(|_| Constraint::Length(12))
                     .collect::<Vec<_>>(),
             )
             .split(frame.area());
@@ -302,12 +294,13 @@ impl App {
                 Constraint::Length(1), // CPU Gauge
                 Constraint::Length(1), // RAM Gauge
                 Constraint::Length(1), // Disk Gauge
-                Constraint::Min(0),
+                Constraint::Length(1), // Failed units header
+                Constraint::Min(0),    // Failed units list
             ])
             .split(inner_rect);
 
             let uptime_info = if let Some(stats) = &host.stats {
-                format!("Uptime: {}s", stats.uptime)
+                format!("IP: {} | Uptime: {}", stats.ip_address, stats.uptime)
             } else {
                 "".to_string()
             };
@@ -324,6 +317,22 @@ impl App {
 
                 let disk_gauge = MetricGauge::new("Disk", host.disk_usage);
                 frame.render_widget(disk_gauge, inner_layout[3]);
+
+                if let Some(stats) = &host.stats {
+                    let header = Paragraph::new(Span::styled(
+                        format!("Failed Units ({}):", stats.failed_units.len()),
+                        Style::default().fg(Color::Red).bold(),
+                    ));
+                    frame.render_widget(header, inner_layout[4]);
+
+                    let items: Vec<ListItem> = stats
+                        .failed_units
+                        .iter()
+                        .map(|u| ListItem::new(format!("  • {}", u)))
+                        .collect();
+                    let list = List::new(items);
+                    frame.render_widget(list, inner_layout[5]);
+                }
             }
         }
     }
