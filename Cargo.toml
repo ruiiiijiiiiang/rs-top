@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
-futures = "0.3"
+color-eyre = "0.6"
 ratatui = { version = "0.30", features = ["all-widgets"] }
 openssh = "0.11"
 tokio = { version = "1", features = ["full"] }
