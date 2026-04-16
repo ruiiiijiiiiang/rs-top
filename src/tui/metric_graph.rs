@@ -1,14 +1,13 @@
 use ratatui::{
     prelude::*,
     symbols,
-    widgets::{Axis, Block, Borders, Chart, Dataset, GraphType},
+    widgets::{Axis, Block, BorderType, Chart, Dataset, GraphType},
 };
 
 pub struct MetricGraph<'a> {
     title: String,
     data: &'a [(f64, f64)],
     color: Color,
-    y_labels: Vec<String>,
 }
 
 impl<'a> MetricGraph<'a> {
@@ -17,13 +16,7 @@ impl<'a> MetricGraph<'a> {
             title: title.to_string(),
             data,
             color,
-            y_labels: vec!["0%".to_string(), "50%".to_string(), "100%".to_string()],
         }
-    }
-
-    pub fn with_y_labels(mut self, labels: Vec<String>) -> Self {
-        self.y_labels = labels;
-        self
     }
 }
 
@@ -44,20 +37,11 @@ impl<'a> Widget for MetricGraph<'a> {
                 .data(self.data),
         ];
 
-        let labels: Vec<Span> = self
-            .y_labels
-            .iter()
-            .map(|l| Span::styled(l, Style::default().fg(Color::Gray)))
-            .collect();
-
         let chart = Chart::new(datasets)
             .block(
-                Block::default()
-                    .title(Span::styled(
-                        format!(" {} ", self.title),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ))
-                    .borders(Borders::ALL),
+                Block::bordered()
+                    .title(format!(" {} ", self.title))
+                    .border_type(BorderType::Rounded),
             )
             .x_axis(
                 Axis::default()
@@ -68,7 +52,7 @@ impl<'a> Widget for MetricGraph<'a> {
                 Axis::default()
                     .style(Style::default().fg(Color::Gray))
                     .bounds([0.0, 100.0])
-                    .labels(labels),
+                    .labels(["0%", "50%", "100%"]),
             );
 
         chart.render(area, buf);

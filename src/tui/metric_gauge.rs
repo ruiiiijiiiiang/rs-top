@@ -1,7 +1,7 @@
 use ratatui::{
     prelude::*,
     style::palette::tailwind::{self, Palette},
-    widgets::*,
+    widgets::LineGauge,
 };
 
 const PALETTES: [Palette; 7] = [
@@ -59,14 +59,14 @@ impl<'a> Widget for MetricGauge<'a> {
         ]);
         let [label_area, gauge_area, percentage_area] = area.layout(&gauge_layout);
 
-        let label_span = Span::styled(format!("{}:", self.label), Style::default().bold());
+        let label_span = format!("{}:", self.label);
         label_span.render(label_area, buf);
 
         self.gauge.render(gauge_area, buf);
 
         let span = Span::styled(
             format!("{:.1}%", self.percentage),
-            Style::default().fg(self.color).bold(),
+            Style::default().fg(self.color),
         );
         span.render(percentage_area, buf);
     }

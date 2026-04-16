@@ -1,7 +1,7 @@
 use ratatui::{
     prelude::*,
     symbols,
-    widgets::{Axis, Block, Borders, Chart, Dataset, GraphType},
+    widgets::{Axis, Block, BorderType, Chart, Dataset, GraphType},
 };
 
 pub struct DivergentGraph<'a> {
@@ -87,12 +87,9 @@ impl<'a> Widget for DivergentGraph<'a> {
 
         let chart = Chart::new(datasets)
             .block(
-                Block::default()
-                    .title(Span::styled(
-                        format!(" {} ", self.title),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ))
-                    .borders(Borders::ALL),
+                Block::bordered()
+                    .title(format!(" {} ", self.title))
+                    .border_type(BorderType::Rounded),
             )
             .x_axis(
                 Axis::default()

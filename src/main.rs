@@ -1,15 +1,25 @@
+use std::{fs, process};
+
+use serde::Deserialize;
+
+use crate::app::App;
+
 pub mod app;
+pub mod host_stats;
 pub mod tui;
 pub mod util;
 
-use crate::app::App;
-use serde::Deserialize;
-use std::fs;
-use std::process;
+#[derive(Deserialize, Clone, Debug)]
+pub struct HostConfig {
+    pub user: Option<String>,
+    pub port: Option<u16>,
+    pub identity_file: Option<String>,
+    pub address: String,
+}
 
 #[derive(Deserialize)]
 struct Config {
-    hosts: Vec<String>,
+    hosts: Vec<HostConfig>,
 }
 
 #[tokio::main]

@@ -1,5 +1,13 @@
-use crate::{app::HostState, tui::metric_gauge::MetricGauge, util::format_bytes};
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, BorderType, Paragraph},
+};
+
+use crate::{
+    app::HostState,
+    tui::metric_gauge::MetricGauge,
+    util::{format_load_avg, format_rate},
+};
 
 pub struct HostOverview<'a> {
     pub host: &'a HostState,
@@ -21,16 +29,16 @@ impl<'a> Widget for HostOverview<'a> {
             _ => Color::Yellow,
         };
 
-        let border_type = if self.focused {
-            BorderType::Double
+        let style = if self.focused {
+            Style::new().on_dark_gray().bold().italic()
         } else {
-            BorderType::Rounded
+            Style::new()
         };
 
-        let block = Block::default()
+        let block = Block::bordered()
             .title(format!(" {} ({}) ", host.name, host.status))
-            .borders(Borders::ALL)
-            .border_type(border_type)
+            .style(style)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(color));
 
         let inner_rect = block.inner(area);
@@ -48,12 +56,10 @@ impl<'a> Widget for HostOverview<'a> {
 
         let host_info = if let Some(stats) = &host.stats {
             format!(
-                "IP: {} | Uptime: {} | Load: {:.2} {:.2} {:.2}",
+                "IP: {} | Uptime: {} | Load: {}",
                 stats.ip_address,
                 stats.uptime,
-                stats.load_avg.0,
-                stats.load_avg.1,
-                stats.load_avg.2
+                format_load_avg(stats.load_avg)
             )
         } else {
             "".to_string()
@@ -81,21 +87,20 @@ impl<'a> Widget for HostOverview<'a> {
             MetricGauge::new("Disk", disk_usage).render(inner_layout[3], buf);
 
             if let Some(stats) = &host.stats {
-                let (rx_val, rx_unit) =
-                    format_bytes(host.net_rx_rate.last().copied().unwrap_or(0.0));
-                let (tx_val, tx_unit) =
-                    format_bytes(host.net_tx_rate.last().copied().unwrap_or(0.0));
+                let rx_rate = host.net_rx_rate.last().copied().unwrap_or(0.0);
+                let tx_rate = host.net_tx_rate.last().copied().unwrap_or(0.0);
 
                 let net_load_info = format!(
-                    "Net RX: {:.1} {}/s | Net TX: {:.1} {}/s",
-                    rx_val, rx_unit, tx_val, tx_unit,
+                    "Net RX: {} | Net TX: {}",
+                    format_rate(rx_rate),
+                    format_rate(tx_rate),
                 );
                 Paragraph::new(net_load_info).render(inner_layout[4], buf);
 
                 let failed_style = if stats.failed_units.is_empty() {
                     Style::default().fg(Color::Reset)
                 } else {
-                    Style::default().fg(Color::Red).bold()
+                    Style::default().fg(Color::Red)
                 };
                 Paragraph::new(Span::styled(
                     format!("Failed Units: {}", stats.failed_units.len()),

@@ -1,6 +1,6 @@
 use std::{error::Error, sync::Arc, time::Duration};
 
-use openssh::{KnownHosts, Session};
+use openssh::{KnownHosts, Session, SessionBuilder};
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{self, Event, KeyCode},
@@ -10,11 +10,13 @@ use ratatui::{
 use tokio::{sync::mpsc, time::interval};
 
 use crate::{
-    tui::{host_detail::HostDetail, host_overview::HostOverview},
-    util::HostStats,
+    HostConfig,
+    host_stats::HostStats,
+    tui::{host_details::HostDetails, host_overview::HostOverview},
 };
 
 const INTERVAL: u64 = 2;
+const MAX_HISTORY: usize = 200;
 
 pub enum AppAction {
     Input(Event),
@@ -26,6 +28,7 @@ pub enum AppAction {
 #[derive(Debug, Clone, Default)]
 pub struct HostState {
     pub name: String,
+    pub config: Option<HostConfig>,
     pub status: String,
     pub session: Option<Arc<Session>>,
     pub stats: Option<HostStats>,
@@ -41,6 +44,7 @@ pub struct HostState {
     pub net_rx_rate: Vec<f64>,
     pub net_tx_rate: Vec<f64>,
     pub process_scroll: usize,
+    pub failed_units_scroll: usize,
 }
 
 pub struct App {
@@ -51,15 +55,21 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(hosts: Vec<String>) -> Self {
+    pub fn new(hosts: Vec<HostConfig>) -> Self {
+        let current_user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
         Self {
             running: true,
             hosts: hosts
                 .into_iter()
-                .map(|name| HostState {
-                    name,
-                    status: "Connecting...".to_string(),
-                    ..Default::default()
+                .map(|config| {
+                    let user = config.user.as_deref().unwrap_or(&current_user);
+                    let port = config.port.unwrap_or(22);
+                    HostState {
+                        name: format!("{}@{}:{}", user, config.address, port),
+                        config: Some(config),
+                        status: "Connecting...".to_string(),
+                        ..Default::default()
+                    }
                 })
                 .collect(),
             focused_host: 0,
@@ -73,11 +83,33 @@ impl App {
 
         let (tx, rx) = mpsc::channel(100);
 
+        let current_user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
+
         for host in &self.hosts {
             let host_name = host.name.clone();
+            let config = host.config.clone().unwrap();
             let tx = tx.clone();
+            let default_user = current_user.clone();
+
             tokio::spawn(async move {
-                match Session::connect(&host_name, KnownHosts::Strict).await {
+                let mut builder = SessionBuilder::default();
+
+                let user = config.user.unwrap_or(default_user);
+                builder.user(user);
+
+                builder.port(config.port.unwrap_or(22));
+
+                if let Some(identity_file) = config.identity_file
+                    && !identity_file.is_empty()
+                {
+                    builder.keyfile(identity_file);
+                }
+
+                builder.known_hosts_check(KnownHosts::Strict);
+
+                let session_res = builder.connect(&config.address).await;
+
+                match session_res {
                     Ok(session) => {
                         let session = Arc::new(session);
                         let _ = tx
@@ -152,6 +184,9 @@ impl App {
             terminal.draw(|frame| self.draw(frame))?;
 
             if !self.running {
+                for host in &mut self.hosts {
+                    host.session = None;
+                }
                 break;
             }
         }
@@ -192,6 +227,18 @@ impl App {
                                 host.process_scroll = host.process_scroll.saturating_sub(1);
                             }
                         }
+                        KeyCode::Char('h') | KeyCode::Left => {
+                            if let Some(host) = self.hosts.get_mut(self.focused_host) {
+                                host.failed_units_scroll =
+                                    host.failed_units_scroll.saturating_sub(1);
+                            }
+                        }
+                        KeyCode::Char('l') | KeyCode::Right => {
+                            if let Some(host) = self.hosts.get_mut(self.focused_host) {
+                                host.failed_units_scroll =
+                                    host.failed_units_scroll.saturating_add(1);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -215,6 +262,9 @@ impl App {
                         if total_diff > 0 {
                             let usage = 100.0 * (1.0 - (idle_diff as f64 / total_diff as f64));
                             host.cpu_usage.push(usage);
+                            if host.cpu_usage.len() > MAX_HISTORY {
+                                host.cpu_usage.remove(0);
+                            }
                         }
                     }
                     host.prev_cpu_total = stats.cpu_total;
@@ -223,6 +273,9 @@ impl App {
                     host.mem_total = stats.mem_total;
                     let used = stats.mem_total.saturating_sub(stats.mem_available);
                     host.mem_used.push(used);
+                    if host.mem_used.len() > MAX_HISTORY {
+                        host.mem_used.remove(0);
+                    }
 
                     host.disk_total = stats.disk_total;
                     host.disk_used = stats.disk_used;
@@ -233,7 +286,13 @@ impl App {
                         let tx_rate = (stats.net_tx.saturating_sub(host.prev_net_tx)) as f64
                             / INTERVAL as f64;
                         host.net_rx_rate.push(rx_rate);
+                        if host.net_rx_rate.len() > MAX_HISTORY {
+                            host.net_rx_rate.remove(0);
+                        }
                         host.net_tx_rate.push(tx_rate);
+                        if host.net_tx_rate.len() > MAX_HISTORY {
+                            host.net_tx_rate.remove(0);
+                        }
                     }
                     host.prev_net_rx = stats.net_rx;
                     host.prev_net_tx = stats.net_tx;
@@ -260,6 +319,13 @@ impl App {
             scroll = self.focused_host - visible_count + 1;
         }
 
+        let has_scrollbar = self.hosts.len() > visible_count;
+        let list_area = if has_scrollbar {
+            Layout::horizontal([Constraint::Min(0), Constraint::Length(1)]).split(host_area)[0]
+        } else {
+            host_area
+        };
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
@@ -267,7 +333,7 @@ impl App {
                     .map(|_| Constraint::Length(item_height as u16))
                     .collect::<Vec<_>>(),
             )
-            .split(host_area);
+            .split(list_area);
 
         for i in 0..visible_count {
             let host_idx = scroll + i;
@@ -277,17 +343,17 @@ impl App {
             }
         }
 
-        if self.hosts.len() > visible_count {
+        if has_scrollbar {
             let scrollbar = Scrollbar::default()
                 .orientation(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("↑"))
-                .end_symbol(Some("↓"));
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"));
             let mut scrollbar_state = ScrollbarState::new(self.hosts.len()).position(scroll);
             frame.render_stateful_widget(scrollbar, host_area, &mut scrollbar_state);
         }
 
         if let Some(host) = self.hosts.get(self.focused_host) {
-            frame.render_widget(HostDetail::new(host), main_layout[1]);
+            frame.render_widget(HostDetails::new(host), main_layout[1]);
         }
     }
 }
