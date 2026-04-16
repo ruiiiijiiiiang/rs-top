@@ -2,7 +2,7 @@
 
 `rs-top` is a lightweight, agentless, and read-only remote system monitor. It provides a real-time TUI dashboard for monitoring multiple remote hosts simultaneously via SSH. Heavily influenced by classic tools like `top`, `htop`, and `btop`, it aims to provide a similar experience for remote server clusters.
 
-![rs-top screenshot](https://git.ruijiang.me/rui/rs-top/raw/branch/screenshot/screenshot.png)
+![rs-top screenshot](https://raw.githubusercontent.com/ruiiiijiiiiang/rs-top/refs/heads/screenshot/screenshot.png)
 
 ## Key Features
 
