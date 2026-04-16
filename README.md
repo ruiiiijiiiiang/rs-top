@@ -1,13 +1,12 @@
-# rs-top (remote-server-top)
+# rs-top (Remote-Server-Top)
 
-`rs-top` is a lightweight, agentless, and read-only remote system monitor. It provides a real-time TUI dashboard for monitoring multiple remote hosts simultaneously via SSH. Heavily influenced by classic tools like `top`, `htop`, and `btop`, it aims to provide a similar experience for remote server clusters.
+`rs-top` is a lightweight, agentless, and read-only remote system monitor. It provides a real-time TUI dashboard for monitoring multiple remote hosts simultaneously via SSH. Heavily influenced by classic tools like `top`, `htop`, and `btop`, it aims to provide a similar experience for remote servers.
 
 ![rs-top screenshot](https://raw.githubusercontent.com/ruiiiijiiiiang/rs-top/refs/heads/screenshot/screenshot.png)
 
 ## Key Features
 
 - **Agentless**: No software installation is required on the remote hosts. It uses standard Linux tools (like `top`, `procfs`, and `systemctl`) already present on most systems.
-- **Lightweight**: Written in Rust, utilizing `tokio` for asynchronous task management and `ratatui` for a responsive terminal UI.
 - **Read-Only**: The tool only fetches system statistics and does not perform any modifications to the remote hosts.
 - **SSH-Based**: Relies on the host's native `ssh` binary and configuration (e.g., `~/.ssh/config`, `known_hosts`). It seamlessly integrates with your existing SSH setup, including identity files and multiplexing.
 
@@ -35,20 +34,26 @@ address = "backup-node"
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| `Tab` | Focus next host |
-| `BackTab` | Focus previous host |
-| `j` or `Down` | Scroll process list down |
-| `k` or `Up` | Scroll process list up |
-| `h` or `Left` | Scroll failed units horizontally left |
+| Key            | Action                                 |
+| -------------- | -------------------------------------- |
+| `Tab`          | Focus next host                        |
+| `BackTab`      | Focus previous host                    |
+| `j` or `Down`  | Scroll process list down               |
+| `k` or `Up`    | Scroll process list up                 |
+| `h` or `Left`  | Scroll failed units horizontally left  |
 | `l` or `Right` | Scroll failed units horizontally right |
-| `q` | Quit |
+| `q`            | Quit                                   |
 
 ## Requirements
 
 - Local machine: `ssh` binary installed and accessible in the system path.
-- Remote hosts: Standard Linux environment with access to `/proc` and `systemctl` (for failed units monitoring).
+- Remote hosts: Standard Linux environment with access to `cat`, `top` and `systemctl`
+
+## Technologies Used
+
+- **[Ratatui](https://ratatui.rs)**: Terminal UI library for the interactive dashboard.
+- **[Tokio](https://tokio.rs/)**: Async runtime for concurrent host monitoring.
+- **[openssh-rust](https://github.com/openssh-rust/openssh)**: Rust wrapper for managing SSH connections.
 
 ## Contributing
 

@@ -1,10 +1,10 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, BorderType, Paragraph},
+    widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 use crate::{
-    app::HostState,
+    app::{ConnectionStatus, HostState},
     tui::metric_gauge::MetricGauge,
     util::{format_load_avg, format_rate},
 };
@@ -14,19 +14,37 @@ pub struct HostOverview<'a> {
     pub focused: bool,
 }
 
+pub struct HostOverviewList<'a> {
+    pub hosts: &'a [HostState],
+    pub focused_host: usize,
+    pub host_scroll: usize,
+}
+
 impl<'a> HostOverview<'a> {
     pub fn new(host: &'a HostState, focused: bool) -> Self {
         Self { host, focused }
     }
 }
 
+impl<'a> HostOverviewList<'a> {
+    pub const ITEM_HEIGHT: u16 = 8;
+
+    pub fn new(hosts: &'a [HostState], focused_host: usize, host_scroll: usize) -> Self {
+        Self {
+            hosts,
+            focused_host,
+            host_scroll,
+        }
+    }
+}
+
 impl<'a> Widget for HostOverview<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let host = self.host;
-        let color = match host.status.as_str() {
-            "Connected" => Color::Green,
-            s if s.starts_with("Failed") => Color::Red,
-            _ => Color::Yellow,
+        let (status_label, color) = match host.connection_status {
+            ConnectionStatus::Connecting => ("Connecting", Color::Yellow),
+            ConnectionStatus::Connected => ("Connected", Color::Green),
+            ConnectionStatus::Failed => ("Failed", Color::Red),
         };
 
         let style = if self.focused {
@@ -36,7 +54,7 @@ impl<'a> Widget for HostOverview<'a> {
         };
 
         let block = Block::bordered()
-            .title(format!(" {} ({}) ", host.name, host.status))
+            .title(format!(" {} ({}) ", host.name, status_label))
             .style(style)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(color));
@@ -108,6 +126,49 @@ impl<'a> Widget for HostOverview<'a> {
                 ))
                 .render(inner_layout[5], buf);
             }
+        }
+    }
+}
+
+impl<'a> Widget for HostOverviewList<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let visible_count = (area.height as usize / Self::ITEM_HEIGHT as usize).max(1);
+        let mut scroll = self.host_scroll;
+        if self.focused_host < scroll {
+            scroll = self.focused_host;
+        } else if self.focused_host >= scroll + visible_count {
+            scroll = self.focused_host - visible_count + 1;
+        }
+
+        let has_scrollbar = self.hosts.len() > visible_count;
+        let list_area = if has_scrollbar {
+            Layout::horizontal([Constraint::Min(0), Constraint::Length(1)]).split(area)[0]
+        } else {
+            area
+        };
+
+        let chunks = Layout::vertical(
+            (0..visible_count)
+                .map(|_| Constraint::Length(Self::ITEM_HEIGHT))
+                .collect::<Vec<_>>(),
+        )
+        .split(list_area);
+
+        for (i, chunk) in chunks.iter().enumerate() {
+            let host_idx = scroll + i;
+            if let Some(host) = self.hosts.get(host_idx) {
+                let focused = host_idx == self.focused_host;
+                HostOverview::new(host, focused).render(*chunk, buf);
+            }
+        }
+
+        if has_scrollbar {
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"));
+            let mut scrollbar_state = ScrollbarState::new(self.hosts.len()).position(scroll);
+            scrollbar.render(area, buf, &mut scrollbar_state);
         }
     }
 }
