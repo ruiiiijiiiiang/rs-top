@@ -1,14 +1,11 @@
-use ratatui::{
-    prelude::*,
-    widgets::{
-        Block, BorderType, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState,
-    },
-};
+use ratatui::prelude::*;
 
 use crate::{
     app::HostState,
-    tui::{divergent_graph::DivergentGraph, metric_graph::MetricGraph},
+    tui::{
+        divergent_graph::DivergentGraph, failed_units::FailedUnits, metric_graph::MetricGraph,
+        top_processes::TopProcesses,
+    },
     util::{NetworkData, format_bytes, format_load_avg, format_rate, prepare_network_data},
 };
 
@@ -67,41 +64,13 @@ impl<'a> Widget for HostDetails<'a> {
         cpu_graph.render(cpu_area, buf);
 
         if let Some(failed_area) = failed_area {
-            let failed_units_block = Block::bordered()
-                .title(format!(" Failed Units ({}) ", failed_units_count))
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Red));
-
-            let failed_inner = failed_units_block.inner(failed_area);
-            failed_units_block.render(failed_area, buf);
-
-            let failed_units_str = self
+            let failed_units = self
                 .host
                 .stats
                 .as_ref()
-                .map(|s| s.failed_units.join(", "))
-                .unwrap_or_default();
-
-            let content_width = failed_units_str.len();
-            let max_scroll = content_width.saturating_sub(failed_inner.width as usize);
-            let scroll = self.host.failed_units_scroll.min(max_scroll);
-
-            let failed_units_paragraph = Paragraph::new(failed_units_str.as_str())
-                .style(Style::default().fg(Color::Red))
-                .scroll((0, scroll as u16));
-            failed_units_paragraph.render(failed_inner, buf);
-
-            if content_width > failed_inner.width as usize {
-                let scrollbar = Scrollbar::default()
-                    .orientation(ScrollbarOrientation::HorizontalBottom)
-                    .begin_symbol(Some("◄"))
-                    .end_symbol(Some("►"));
-                let mut scrollbar_state = ScrollbarState::new(content_width)
-                    .content_length(content_width)
-                    .viewport_content_length(failed_inner.width as usize)
-                    .position(scroll);
-                scrollbar.render(failed_area, buf, &mut scrollbar_state);
-            }
+                .map(|s| s.failed_units.as_slice())
+                .unwrap_or(&[]);
+            FailedUnits::new(failed_units, self.host.failed_units_scroll).render(failed_area, buf);
         }
 
         let mem_total_gb = self.host.mem_total as f64 / (1024.0 * 1024.0);
@@ -148,39 +117,12 @@ impl<'a> Widget for HostDetails<'a> {
                 ]);
         net_graph.render(right_top_chunks[1], buf);
 
-        let (header, items) = if let Some(stats) = &self.host.stats {
-            let mut lines = stats.processes.iter();
-            let header = lines.next().map(|s| s.as_str()).unwrap_or("");
-            let items: Vec<ListItem> = lines.map(|p| ListItem::new(p.as_str())).collect();
-            (header, items)
-        } else {
-            ("", vec![])
-        };
-
-        let process_block = Block::bordered()
-            .title(" Top Processes ")
-            .border_type(BorderType::Rounded);
-        let process_inner = process_block.inner(chunks[1]);
-        process_block.render(chunks[1], buf);
-
-        let process_chunks =
-            Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(process_inner);
-
-        Paragraph::new(format!("    {}", header)).render(process_chunks[0], buf);
-
-        let state = ListState::default().with_offset(self.host.process_scroll);
-        let process_list = List::new(items);
-
-        StatefulWidget::render(process_list, process_chunks[1], buf, &mut state.clone());
-
-        if let Some(stats) = &self.host.stats {
-            let scrollbar = Scrollbar::default()
-                .orientation(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼"));
-            let mut scrollbar_state = ScrollbarState::new(stats.processes.len().saturating_sub(1))
-                .position(self.host.process_scroll);
-            scrollbar.render(chunks[1], buf, &mut scrollbar_state);
-        }
+        let processes = self
+            .host
+            .stats
+            .as_ref()
+            .map(|stats| stats.processes.as_slice())
+            .unwrap_or(&[]);
+        TopProcesses::new(processes, self.host.process_scroll).render(chunks[1], buf);
     }
 }

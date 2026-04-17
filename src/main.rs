@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::app::App;
 
 pub mod app;
-pub mod host_stats;
+pub mod remote;
 pub mod tui;
 pub mod util;
 
@@ -46,6 +46,10 @@ async fn main() {
         process::exit(1);
     }
 
-    let _ = App::new(config.hosts).start().await;
+    if let Err(err) = App::new(config.hosts).start().await {
+        eprintln!("Application error: {err:?}");
+        process::exit(1);
+    }
+
     process::exit(0);
 }
