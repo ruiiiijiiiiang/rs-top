@@ -1,18 +1,7 @@
-use ratatui::{
-    prelude::*,
-    style::palette::tailwind::{self, Palette},
-    widgets::LineGauge,
-};
+use ratatui::prelude::*;
+use ratatui::widgets::LineGauge;
 
-const PALETTES: [Palette; 7] = [
-    tailwind::EMERALD,
-    tailwind::GREEN,
-    tailwind::LIME,
-    tailwind::YELLOW,
-    tailwind::ORANGE,
-    tailwind::RED,
-    tailwind::PINK,
-];
+use crate::util;
 
 pub struct MetricGauge<'a> {
     label: String,
@@ -23,12 +12,7 @@ pub struct MetricGauge<'a> {
 
 impl<'a> MetricGauge<'a> {
     fn get_colors(percentage: f64) -> (Color, Color) {
-        let num_segments = PALETTES.len();
-        let segment_index = (percentage / 100.0 * num_segments as f64)
-            .floor()
-            .min(num_segments as f64 - 1.0) as usize;
-
-        let palette = &PALETTES[segment_index];
+        let palette = util::get_palette(percentage);
         (palette.c500, palette.c900)
     }
 

@@ -47,15 +47,17 @@ impl<'a> Widget for HostOverview<'a> {
             ConnectionStatus::Failed => ("Failed", Color::Red),
         };
 
-        let style = if self.focused {
-            Style::new().on_dark_gray().bold().italic()
-        } else {
-            Style::new()
-        };
-
         let block = Block::bordered()
-            .title(format!(" {} ({}) ", host.name, status_label))
-            .style(style)
+            .title(if self.focused {
+                format!(" {} ({}) | Tab: ▼ | Shift+Tab: ▲ ", host.name, status_label)
+            } else {
+                format!(" {} ({}) ", host.name, status_label)
+            })
+            .style(if self.focused {
+                Style::default().on_dark_gray().bold().italic()
+            } else {
+                Style::default()
+            })
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(color));
 
@@ -115,16 +117,25 @@ impl<'a> Widget for HostOverview<'a> {
                 );
                 Paragraph::new(net_load_info).render(inner_layout[4], buf);
 
-                let failed_style = if stats.failed_units.is_empty() {
+                let failed_count = stats.failed_units.len();
+                let failed_style = if failed_count == 0 {
                     Style::default().fg(Color::Reset)
                 } else {
                     Style::default().fg(Color::Red)
                 };
-                Paragraph::new(Span::styled(
-                    format!("Failed Units: {}", stats.failed_units.len()),
-                    failed_style,
-                ))
-                .render(inner_layout[5], buf);
+
+                let failed_units_str = stats.failed_units.join(", ");
+                let mut failed_text =
+                    format!("Failed Units ({}): {}", failed_count, failed_units_str);
+
+                let width = inner_layout[5].width as usize;
+                if failed_text.chars().count() > width && width > 3 {
+                    failed_text = failed_text.chars().take(width - 3).collect();
+                    failed_text.push_str("...");
+                }
+
+                Paragraph::new(Span::styled(failed_text, failed_style))
+                    .render(inner_layout[5], buf);
             }
         }
     }

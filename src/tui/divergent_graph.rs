@@ -96,7 +96,8 @@ impl<'a> Widget for DivergentGraph<'a> {
                     .style(Style::default().fg(Color::Reset))
                     .bounds([min_x, max_x]),
             )
-            .y_axis(y_axis);
+            .y_axis(y_axis)
+            .legend_position(None);
 
         chart.render(area, buf);
     }

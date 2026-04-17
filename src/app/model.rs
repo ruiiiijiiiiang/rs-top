@@ -39,7 +39,6 @@ pub struct HostState {
     pub net_rx_rate: Vec<f64>,
     pub net_tx_rate: Vec<f64>,
     pub process_scroll: usize,
-    pub failed_units_scroll: usize,
 }
 
 #[derive(Debug, Clone, Default)]

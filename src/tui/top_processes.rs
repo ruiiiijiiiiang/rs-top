@@ -32,7 +32,11 @@ impl<'a> Widget for TopProcesses<'a> {
         let process_chunks =
             Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(process_inner);
 
-        Paragraph::new(format!("    {}", header)).render(process_chunks[0], buf);
+        Paragraph::new(Span::styled(
+            format!("    {}", header),
+            Style::default().bold().black().on_white(),
+        ))
+        .render(process_chunks[0], buf);
 
         let state = ListState::default().with_offset(self.scroll);
         let process_list = List::new(items);

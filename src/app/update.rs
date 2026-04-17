@@ -85,16 +85,6 @@ impl App {
                         host.process_scroll = host.process_scroll.saturating_sub(1);
                     }
                 }
-                KeyCode::Char('h') | KeyCode::Left => {
-                    if let Some(host) = self.hosts.get_mut(self.focused_host) {
-                        host.failed_units_scroll = host.failed_units_scroll.saturating_sub(1);
-                    }
-                }
-                KeyCode::Char('l') | KeyCode::Right => {
-                    if let Some(host) = self.hosts.get_mut(self.focused_host) {
-                        host.failed_units_scroll = host.failed_units_scroll.saturating_add(1);
-                    }
-                }
                 _ => {}
             }
         }
