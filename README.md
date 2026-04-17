@@ -1,4 +1,4 @@
-# rs-top (Remote-Server-Top)
+# rs-top (Remote-System-Top)
 
 `rs-top` is a lightweight, agentless, and read-only remote system monitor. It provides a real-time TUI dashboard for monitoring multiple remote hosts simultaneously via SSH. Heavily influenced by classic tools like `top`, `htop`, and `btop`, it aims to provide a similar experience for remote servers.
 
@@ -9,6 +9,30 @@
 - **Agentless**: No software installation is required on the remote hosts. It uses standard Linux tools (like `top`, `cat`, and `systemctl`) already present on most systems.
 - **Read-Only**: The tool only fetches system statistics and does not perform any modifications to the remote hosts. No `sudo` privilege is required.
 - **SSH-Based**: Relies on the host's native `ssh` binary and configuration (e.g., `~/.ssh/config`, `known_hosts`). It seamlessly integrates with your existing SSH setup, including identity files and multiplexing.
+
+## Installation
+
+### From Cargo
+
+```bash
+cargo install rs-top
+```
+
+### From Nix (Flakes)
+
+Run directly:
+
+```bash
+nix run github:ruiiiijiiiiang/rs-top
+```
+
+### From AUR (Arch Linux)
+
+Install using an AUR helper like `yay`:
+
+```bash
+yay -S rs-top
+```
 
 ## Configuration
 
