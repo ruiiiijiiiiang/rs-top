@@ -14,7 +14,7 @@ use tokio::{
 
 use crate::remote::host_stats::HostStats;
 
-pub use model::{App, AppAction, ConnectionStatus, HostState};
+pub use model::{App, AppAction, ConnectionStatus, DisplayMode, HostState};
 
 const INTERVAL: u64 = 2;
 const MAX_HISTORY: usize = 200;

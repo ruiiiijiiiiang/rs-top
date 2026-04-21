@@ -1,6 +1,6 @@
 use ratatui::crossterm::event::{Event, KeyCode};
 
-use super::{App, AppAction, ConnectionStatus, INTERVAL, MAX_HISTORY};
+use super::{App, AppAction, ConnectionStatus, DisplayMode, INTERVAL, MAX_HISTORY};
 
 impl App {
     pub(super) fn update(&mut self, action: AppAction) {
@@ -84,6 +84,12 @@ impl App {
                     if let Some(host) = self.hosts.get_mut(self.focused_host) {
                         host.process_scroll = host.process_scroll.saturating_sub(1);
                     }
+                }
+                KeyCode::Char('m') => {
+                    self.display_mode = match self.display_mode {
+                        DisplayMode::Standard => DisplayMode::Compact,
+                        DisplayMode::Compact => DisplayMode::Standard,
+                    };
                 }
                 _ => {}
             }

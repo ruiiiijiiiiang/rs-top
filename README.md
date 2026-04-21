@@ -53,7 +53,10 @@ identity_file = "/home/user/.ssh/id_ed25519"
 
 [[hosts]]
 address = "backup-node"
-# Uses default user and port (22) if omitted
+# if omitted, uses the following defaults:
+# user = $USER
+# port = 22
+# identity_file = "~/.ssh/"
 ```
 
 ## Controls
@@ -61,7 +64,8 @@ address = "backup-node"
 | Key            | Action                                 |
 | -------------- | -------------------------------------- |
 | `Tab`          | Focus next host                        |
-| `BackTab`      | Focus previous host                    |
+| `Shift+Tab`    | Focus previous host                    |
+| `m`          | Toggle compact mode                        |
 | `j` or `Down`  | Scroll process list down               |
 | `k` or `Up`    | Scroll process list up                 |
 | `q`            | Quit                                   |

@@ -1,17 +1,28 @@
 use ratatui::prelude::*;
 
-use crate::tui::{host_details::HostDetails, host_overview::HostOverviewList};
+use crate::{
+    app::DisplayMode,
+    tui::{host_details::HostDetails, host_overview::HostOverviewList},
+};
 
 use super::App;
 
 impl App {
     pub(super) fn draw(&self, frame: &mut Frame) {
-        let main_layout =
-            Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)])
-                .split(frame.area());
+        let constraints = match self.display_mode {
+            DisplayMode::Standard => [Constraint::Percentage(40), Constraint::Percentage(60)],
+            DisplayMode::Compact => [Constraint::Percentage(10), Constraint::Percentage(90)],
+        };
+
+        let main_layout = Layout::horizontal(constraints).split(frame.area());
 
         frame.render_widget(
-            HostOverviewList::new(&self.hosts, self.focused_host, self.host_scroll),
+            HostOverviewList::new(
+                &self.hosts,
+                self.focused_host,
+                self.host_scroll,
+                self.display_mode,
+            ),
             main_layout[0],
         );
 

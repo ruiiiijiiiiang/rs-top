@@ -41,10 +41,18 @@ pub struct HostState {
     pub process_scroll: usize,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DisplayMode {
+    #[default]
+    Standard,
+    Compact,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct App {
     pub running: bool,
     pub hosts: Vec<HostState>,
     pub focused_host: usize,
     pub host_scroll: usize,
+    pub display_mode: DisplayMode,
 }
