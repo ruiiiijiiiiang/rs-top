@@ -68,7 +68,10 @@ impl<'a> Widget for HostOverview<'a> {
         let title = match self.display_mode {
             DisplayMode::Standard => {
                 if self.focused {
-                    format!(" {} ({}) | Tab: ▼ | Shift+Tab: ▲ ", host.name, status_label)
+                    format!(
+                        " {} ({}) | Tab: ▼ | Shift+Tab: ▲ | Enter: Launch SSH ",
+                        host.name, status_label
+                    )
                 } else {
                     format!(" {} ({}) ", host.name, status_label)
                 }
@@ -241,5 +244,22 @@ impl<'a> Widget for HostOverviewList<'a> {
             let mut scrollbar_state = ScrollbarState::new(self.hosts.len()).position(scroll);
             scrollbar.render(area, buf, &mut scrollbar_state);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HostOverviewList;
+    use crate::app::{DisplayMode, HostState};
+
+    #[test]
+    fn item_height_matches_display_mode() {
+        let hosts = vec![HostState::default()];
+
+        let standard = HostOverviewList::new(&hosts, 0, 0, DisplayMode::Standard);
+        let compact = HostOverviewList::new(&hosts, 0, 0, DisplayMode::Compact);
+
+        assert_eq!(standard.item_height(), 8);
+        assert_eq!(compact.item_height(), 3);
     }
 }

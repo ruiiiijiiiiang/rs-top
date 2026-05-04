@@ -55,3 +55,22 @@ impl<'a> Widget for MetricGauge<'a> {
         span.render(percentage_area, buf);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::{buffer::Buffer, prelude::Rect, widgets::Widget};
+
+    use super::MetricGauge;
+
+    #[test]
+    fn gauge_renders_label_and_percentage_text() {
+        let gauge = MetricGauge::new("CPU", 42.5);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 24, 1));
+
+        gauge.render(Rect::new(0, 0, 24, 1), &mut buf);
+
+        let rendered: String = (0..24).map(|x| buf[(x, 0)].symbol()).collect();
+        assert!(rendered.contains("CPU:"));
+        assert!(rendered.contains("42.5%"));
+    }
+}

@@ -61,14 +61,15 @@ address = "backup-node"
 
 ## Controls
 
-| Key            | Action                                 |
-| -------------- | -------------------------------------- |
-| `Tab`          | Focus next host                        |
-| `Shift+Tab`    | Focus previous host                    |
-| `m`          | Toggle compact mode                        |
-| `j` or `Down`  | Scroll process list down               |
-| `k` or `Up`    | Scroll process list up                 |
-| `q`            | Quit                                   |
+| Key           | Action                                           |
+| ------------- | ------------------------------------------------ |
+| `Tab`         | Focus next host                                  |
+| `Shift+Tab`   | Focus previous host                              |
+| `Enter`       | Exit and open an SSH session to the focused host |
+| `m`           | Toggle compact mode                              |
+| `j` or `Down` | Scroll process list down                         |
+| `k` or `Up`   | Scroll process list up                           |
+| `q`           | Quit                                             |
 
 ## Requirements
 

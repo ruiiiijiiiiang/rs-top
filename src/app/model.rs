@@ -55,4 +55,5 @@ pub struct App {
     pub focused_host: usize,
     pub host_scroll: usize,
     pub display_mode: DisplayMode,
+    pub pending_ssh_host: Option<HostConfig>,
 }

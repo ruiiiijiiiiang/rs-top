@@ -99,3 +99,43 @@ pub fn format_rate(rate: f64) -> String {
     let (val, unit) = format_bytes(rate);
     format!("{:.1} {}/s", val, unit)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_bytes_uses_expected_units() {
+        assert_eq!(format_bytes(999.0), (999.0, "B"));
+        assert_eq!(format_bytes(1_000.0), (1.0, "K"));
+        assert_eq!(format_bytes(1_000_000.0), (1.0, "M"));
+        assert_eq!(format_bytes(1_000_000_000.0), (1.0, "G"));
+    }
+
+    #[test]
+    fn prepare_network_data_builds_series_and_title() {
+        let data = prepare_network_data(&[512.0, 1_500.0], &[100.0, 2_500.0]);
+
+        assert_eq!(data.rx_data, vec![(0.0, 512.0), (1.0, 1_500.0)]);
+        assert_eq!(data.tx_data, vec![(0.0, 100.0), (1.0, 2_500.0)]);
+        assert_eq!(data.max_net, 10_000.0);
+        assert_eq!(data.title, "Net RX: 1.5 K/s TX: 2.5 K/s");
+        assert_eq!(data.y_labels(), vec!["10K", "0", "10K"]);
+    }
+
+    #[test]
+    fn prepare_network_data_defaults_to_one_when_empty() {
+        let data = prepare_network_data(&[], &[]);
+
+        assert_eq!(data.max_net, 1.0);
+        assert_eq!(data.title, "Net RX: 0.0 B/s TX: 0.0 B/s");
+        assert_eq!(data.y_labels(), vec!["1B", "0", "1B"]);
+    }
+
+    #[test]
+    fn formatting_helpers_are_stable() {
+        assert_eq!(format_mem_title(2_500_000, 8_000_000), "RAM 2.5G/8.0G");
+        assert_eq!(format_load_avg((0.25, 1.0, 12.345)), "0.25 1.00 12.35");
+        assert_eq!(format_rate(1_500_000.0), "1.5 M/s");
+    }
+}

@@ -12,6 +12,7 @@ use tokio::{
     time::{interval, timeout},
 };
 
+use crate::HostConfig;
 use crate::remote::host_stats::HostStats;
 
 pub use model::{App, AppAction, ConnectionStatus, DisplayMode, HostState};
@@ -36,7 +37,7 @@ impl App {
         }
     }
 
-    pub async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(&mut self) -> Result<Option<HostConfig>, Box<dyn Error>> {
         color_eyre::install()?;
         let terminal = ratatui::init();
 
@@ -50,7 +51,9 @@ impl App {
         ratatui::restore();
         self.shutdown(&mut background_tasks).await;
 
-        res
+        res?;
+
+        Ok(self.pending_ssh_host.clone())
     }
 
     async fn run(
