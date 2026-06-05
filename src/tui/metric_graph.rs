@@ -35,7 +35,7 @@ impl<'a> Widget for MetricGraph<'a> {
         let datasets = vec![
             Dataset::default()
                 .marker(symbols::Marker::Braille)
-                .graph_type(GraphType::Line)
+                .graph_type(GraphType::Area)
                 .style(Style::default().fg(color))
                 .data(self.data),
         ];
