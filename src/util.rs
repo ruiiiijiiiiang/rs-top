@@ -1,14 +1,16 @@
 use ratatui::style::palette::tailwind::{self, Palette};
 
-pub const PALETTES: [Palette; 8] = [
+pub const PALETTES: [Palette; 10] = [
+    tailwind::CYAN,
+    tailwind::TEAL,
     tailwind::EMERALD,
     tailwind::GREEN,
     tailwind::LIME,
     tailwind::YELLOW,
     tailwind::AMBER,
     tailwind::ORANGE,
-    tailwind::RED,
     tailwind::ROSE,
+    tailwind::RED,
 ];
 
 pub fn get_palette(percentage: f64) -> &'static Palette {

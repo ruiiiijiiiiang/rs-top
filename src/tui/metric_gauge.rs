@@ -1,35 +1,22 @@
 use ratatui::prelude::*;
-use ratatui::widgets::LineGauge;
 
 use crate::util;
 
 pub struct MetricGauge<'a> {
     label: String,
     percentage: f64,
-    gauge: LineGauge<'a>,
     color: Color,
+    _phantom: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a> MetricGauge<'a> {
-    fn get_colors(percentage: f64) -> (Color, Color) {
-        let palette = util::get_palette(percentage);
-        (palette.c500, palette.c900)
-    }
-
     pub fn new(label: &str, percentage: f64) -> Self {
-        let (filled_color, unfilled_color) = Self::get_colors(percentage);
-        let gauge = LineGauge::default()
-            .filled_symbol("⣿")
-            .unfilled_symbol("⡇")
-            .filled_style(Style::default().fg(filled_color))
-            .unfilled_style(Style::default().fg(unfilled_color))
-            .ratio(percentage.clamp(0.0, 100.0) / 100.0)
-            .label("");
+        let color = util::get_palette(percentage).c500;
         Self {
             label: label.to_string(),
             percentage,
-            gauge,
-            color: filled_color,
+            color,
+            _phantom: std::marker::PhantomData,
         }
     }
 }
@@ -46,7 +33,28 @@ impl<'a> Widget for MetricGauge<'a> {
         let label_span = format!("{}:", self.label);
         label_span.render(label_area, buf);
 
-        self.gauge.render(gauge_area, buf);
+        if gauge_area.width > 0 && gauge_area.height > 0 {
+            let width = gauge_area.width as usize;
+            let ratio = (self.percentage.clamp(0.0, 100.0) / 100.0).min(1.0);
+            let filled_cols = (ratio * width as f64).round() as usize;
+
+            for i in 0..width {
+                let col_pct = (i as f64) / (width as f64) * 100.0;
+                let palette = util::get_palette(col_pct);
+
+                let (symbol, fg_color) = if i < filled_cols {
+                    ("⣿", palette.c500)
+                } else {
+                    ("⡇", palette.c900)
+                };
+
+                let cell_x = gauge_area.left() + i as u16;
+                let cell_y = gauge_area.top();
+                buf[(cell_x, cell_y)]
+                    .set_symbol(symbol)
+                    .set_fg(fg_color);
+            }
+        }
 
         let span = Span::styled(
             format!("{:.1}%", self.percentage),
@@ -74,3 +82,4 @@ mod tests {
         assert!(rendered.contains("42.5%"));
     }
 }
+
