@@ -1,7 +1,14 @@
 [package]
 name = "rs-top"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
+authors = ["Rui Jiang me@ruijiang.me"]
+license = "MIT"
+description = "Real-time TUI system monitor for remote hosts"
+readme = "README.md"
+repository = "https://github.com/ruiiiijiiiiang/rs-top"
+keywords = ["tui", "monitoring", "ssh", "system", "remote"]
+categories = ["command-line-utilities", "visualization", "network-programming"]
 
 [dependencies]
 color-eyre = "0.6"

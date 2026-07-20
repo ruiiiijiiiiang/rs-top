@@ -39,7 +39,13 @@ pub struct HostState {
     pub net_rx_rate: Vec<f64>,
     pub net_tx_rate: Vec<f64>,
     pub process_scroll: usize,
-    pub failed_units_scroll: usize,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DisplayMode {
+    #[default]
+    Standard,
+    Compact,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -48,4 +54,6 @@ pub struct App {
     pub hosts: Vec<HostState>,
     pub focused_host: usize,
     pub host_scroll: usize,
+    pub display_mode: DisplayMode,
+    pub pending_ssh_host: Option<HostConfig>,
 }

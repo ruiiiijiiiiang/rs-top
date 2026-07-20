@@ -40,19 +40,38 @@ impl<'a> DivergentGraph<'a> {
 impl<'a> Widget for DivergentGraph<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let mut max_x: f64 = 100.0;
-        let mut max_y: f64 = 1.0;
+        let mut top_max_y: f64 = 0.0;
+        let mut bottom_max_y: f64 = 0.0;
 
         for &v in self.top_data {
             max_x = max_x.max(v.0);
-            max_y = max_y.max(v.1);
+            top_max_y = top_max_y.max(v.1);
         }
         for &v in self.bottom_data {
             max_x = max_x.max(v.0);
-            max_y = max_y.max(v.1);
+            bottom_max_y = bottom_max_y.max(v.1);
         }
 
+        let max_y = top_max_y.max(bottom_max_y).max(1.0);
         let min_x = (max_x - 100.0).max(0.0);
-        let bounds_y = [-max_y * 1.1, max_y * 1.1];
+        let graph_height = area.height.saturating_sub(2) as f64;
+        let bounds_y = if graph_height > 0.0 {
+            let top_rows = if top_max_y >= bottom_max_y {
+                (graph_height / 2.0).ceil()
+            } else {
+                (graph_height / 2.0).floor()
+            };
+            let resolution_y = graph_height * 4.0;
+            let target_zero_idx = top_rows * 4.0;
+            let ratio = target_zero_idx / (resolution_y - 1.0);
+
+            let scale = max_y * 1.1;
+            let top_bound = scale * ratio * 2.0;
+            let bottom_bound = -scale * (1.0 - ratio) * 2.0;
+            [bottom_bound, top_bound]
+        } else {
+            [-max_y * 1.1, max_y * 1.1]
+        };
 
         let negated_bottom: Vec<(f64, f64)> =
             self.bottom_data.iter().map(|&(x, y)| (x, -y)).collect();
@@ -61,13 +80,13 @@ impl<'a> Widget for DivergentGraph<'a> {
             Dataset::default()
                 .name("Top")
                 .marker(symbols::Marker::Braille)
-                .graph_type(GraphType::Line)
+                .graph_type(GraphType::Area)
                 .style(Style::default().fg(self.top_color))
                 .data(self.top_data),
             Dataset::default()
                 .name("Bottom")
                 .marker(symbols::Marker::Braille)
-                .graph_type(GraphType::Line)
+                .graph_type(GraphType::Area)
                 .style(Style::default().fg(self.bottom_color))
                 .data(&negated_bottom),
         ];
@@ -96,7 +115,8 @@ impl<'a> Widget for DivergentGraph<'a> {
                     .style(Style::default().fg(Color::Reset))
                     .bounds([min_x, max_x]),
             )
-            .y_axis(y_axis);
+            .y_axis(y_axis)
+            .legend_position(None);
 
         chart.render(area, buf);
     }

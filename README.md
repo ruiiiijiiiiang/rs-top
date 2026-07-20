@@ -1,4 +1,4 @@
-# rs-top (Remote-Server-Top)
+# rs-top (Remote-System-Top)
 
 `rs-top` is a lightweight, agentless, and read-only remote system monitor. It provides a real-time TUI dashboard for monitoring multiple remote hosts simultaneously via SSH. Heavily influenced by classic tools like `top`, `htop`, and `btop`, it aims to provide a similar experience for remote servers.
 
@@ -6,9 +6,33 @@
 
 ## Key Features
 
-- **Agentless**: No software installation is required on the remote hosts. It uses standard Linux tools (like `top`, `procfs`, and `systemctl`) already present on most systems.
-- **Read-Only**: The tool only fetches system statistics and does not perform any modifications to the remote hosts.
+- **Agentless**: No software installation is required on the remote hosts. It uses standard Linux tools (like `top`, `cat`, and `systemctl`) already present on most systems.
+- **Read-Only**: The tool only fetches system statistics and does not perform any modifications to the remote hosts. No `sudo` privilege is required.
 - **SSH-Based**: Relies on the host's native `ssh` binary and configuration (e.g., `~/.ssh/config`, `known_hosts`). It seamlessly integrates with your existing SSH setup, including identity files and multiplexing.
+
+## Installation
+
+### From Cargo
+
+```bash
+cargo install rs-top
+```
+
+### From Nix (Flakes)
+
+Run directly:
+
+```bash
+nix run github:ruiiiijiiiiang/rs-top
+```
+
+### From AUR (Arch Linux)
+
+Install using an AUR helper like `yay`:
+
+```bash
+yay -S rs-top
+```
 
 ## Configuration
 
@@ -29,25 +53,29 @@ identity_file = "/home/user/.ssh/id_ed25519"
 
 [[hosts]]
 address = "backup-node"
-# Uses default user and port (22) if omitted
+# if omitted, uses the following defaults:
+# user = $USER
+# port = 22
+# identity_file = "~/.ssh/"
 ```
 
 ## Controls
 
-| Key            | Action                                 |
-| -------------- | -------------------------------------- |
-| `Tab`          | Focus next host                        |
-| `BackTab`      | Focus previous host                    |
-| `j` or `Down`  | Scroll process list down               |
-| `k` or `Up`    | Scroll process list up                 |
-| `h` or `Left`  | Scroll failed units horizontally left  |
-| `l` or `Right` | Scroll failed units horizontally right |
-| `q`            | Quit                                   |
+| Key           | Action                                           |
+| ------------- | ------------------------------------------------ |
+| `Tab`         | Focus next host                                  |
+| `Shift+Tab`   | Focus previous host                              |
+| `Enter`       | Exit and open an SSH session to the focused host |
+| `m`           | Toggle compact mode                              |
+| `j` or `Down` | Scroll process list down                         |
+| `k` or `Up`   | Scroll process list up                           |
+| `q`           | Quit                                             |
 
 ## Requirements
 
 - Local machine: `ssh` binary installed and accessible in the system path.
-- Remote hosts: Standard Linux environment with access to `cat`, `top` and `systemctl`
+- Remote hosts: Standard Linux environment with access to `cat`, `top` and `systemctl`.
+- Authentication: SSH key-based authentication must be configured. Password access is not allowed.
 
 ## Technologies Used
 

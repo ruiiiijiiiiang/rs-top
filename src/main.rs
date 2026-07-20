@@ -1,4 +1,7 @@
-use std::{fs, process};
+use std::{
+    fs,
+    process::{self, Command, ExitStatus},
+};
 
 use serde::Deserialize;
 
@@ -46,10 +49,41 @@ async fn main() {
         process::exit(1);
     }
 
-    if let Err(err) = App::new(config.hosts).start().await {
-        eprintln!("Application error: {err:?}");
-        process::exit(1);
+    let exit_code = match App::new(config.hosts).start().await {
+        Ok(Some(host)) => match launch_ssh_session(&host) {
+            Ok(status) => status.code().unwrap_or(1),
+            Err(err) => {
+                eprintln!("Error starting SSH session: {err}");
+                1
+            }
+        },
+        Ok(None) => 0,
+        Err(err) => {
+            eprintln!("Application error: {err:?}");
+            1
+        }
+    };
+
+    process::exit(exit_code);
+}
+
+fn launch_ssh_session(host: &HostConfig) -> std::io::Result<ExitStatus> {
+    let mut command = Command::new("ssh");
+
+    if let Some(port) = host.port {
+        command.arg("-p").arg(port.to_string());
     }
 
-    process::exit(0);
+    if let Some(identity_file) = &host.identity_file
+        && !identity_file.is_empty()
+    {
+        command.arg("-i").arg(identity_file);
+    }
+
+    let destination = match &host.user {
+        Some(user) if !user.is_empty() => format!("{user}@{}", host.address),
+        _ => host.address.clone(),
+    };
+
+    command.arg(destination).status()
 }

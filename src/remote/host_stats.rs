@@ -203,3 +203,157 @@ impl HostStats {
             .collect();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::HostStats;
+
+    #[test]
+    fn parse_mem_extracts_total_and_available_memory() {
+        let mut stats = HostStats::default();
+        stats.parse_mem(
+            "MemTotal:       32768000 kB\n\
+             MemFree:         1024000 kB\n\
+             MemAvailable:   24576000 kB\n",
+        );
+
+        assert_eq!(stats.mem_total, 32_768_000);
+        assert_eq!(stats.mem_available, 24_576_000);
+    }
+
+    #[test]
+    fn parse_mem_defaults_missing_or_invalid_values_to_zero() {
+        let mut stats = HostStats {
+            mem_total: 1,
+            mem_available: 1,
+            ..Default::default()
+        };
+        stats.parse_mem("MemTotal:\nMemAvailable: not-a-number\n");
+
+        assert_eq!(stats.mem_total, 0);
+        assert_eq!(stats.mem_available, 0);
+    }
+
+    #[test]
+    fn parse_cpu_sums_fields_and_tracks_idle_column() {
+        let mut stats = HostStats::default();
+        stats.parse_cpu("cpu  10 20 30 40 50 60 70 80 90 100");
+
+        assert_eq!(stats.cpu_total, 550);
+        assert_eq!(stats.cpu_idle, 40);
+    }
+
+    #[test]
+    fn parse_cpu_treats_invalid_numbers_as_zero() {
+        let mut stats = HostStats::default();
+        stats.parse_cpu("cpu  10 20 nope 40");
+
+        assert_eq!(stats.cpu_total, 70);
+        assert_eq!(stats.cpu_idle, 40);
+    }
+
+    #[test]
+    fn parse_uptime_formats_multiple_ranges() {
+        let mut stats = HostStats::default();
+        stats.parse_uptime("59.9 0.0");
+        assert_eq!(stats.uptime, "59s");
+
+        stats.parse_uptime("121.0 0.0");
+        assert_eq!(stats.uptime, "2m 1s");
+
+        stats.parse_uptime("3661.0 0.0");
+        assert_eq!(stats.uptime, "1h 1m 1s");
+
+        stats.parse_uptime("90061.0 0.0");
+        assert_eq!(stats.uptime, "1d 1h 1m 1s");
+    }
+
+    #[test]
+    fn parse_disk_extracts_total_and_used_bytes() {
+        let mut stats = HostStats::default();
+        stats.parse_disk("/dev/sda1 1000000000 250000000 750000000 25% /\n");
+
+        assert_eq!(stats.disk_total, 1_000_000_000);
+        assert_eq!(stats.disk_used, 250_000_000);
+    }
+
+    #[test]
+    fn parse_disk_ignores_short_lines() {
+        let mut stats = HostStats {
+            disk_total: 1,
+            disk_used: 1,
+            ..Default::default()
+        };
+        stats.parse_disk("filesystem only\n");
+
+        assert_eq!(stats.disk_total, 1);
+        assert_eq!(stats.disk_used, 1);
+    }
+
+    #[test]
+    fn parse_ip_uses_remote_address_from_ssh_connection() {
+        let mut stats = HostStats::default();
+        stats.parse_ip("192.168.1.10 53124 10.0.0.5 22");
+
+        assert_eq!(stats.ip_address, "10.0.0.5");
+    }
+
+    #[test]
+    fn parse_ip_defaults_to_unknown_when_missing() {
+        let mut stats = HostStats::default();
+        stats.parse_ip("127.0.0.1");
+
+        assert_eq!(stats.ip_address, "Unknown");
+    }
+
+    #[test]
+    fn parse_load_avg_reads_first_three_values() {
+        let mut stats = HostStats::default();
+        stats.parse_load_avg("0.55 1.23 4.56 2/123 4567");
+
+        assert_eq!(stats.load_avg, (0.55, 1.23, 4.56));
+    }
+
+    #[test]
+    fn parse_load_avg_defaults_invalid_values_to_zero() {
+        let mut stats = HostStats::default();
+        stats.parse_load_avg("0.55 nope 4.56");
+
+        assert_eq!(stats.load_avg, (0.55, 0.0, 4.56));
+    }
+
+    #[test]
+    fn parse_net_ignores_loopback_and_sums_other_interfaces() {
+        let mut stats = HostStats::default();
+        stats.parse_net(
+            "Inter-|   Receive                                                |  Transmit\n\
+             face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed\n\
+             lo: 100 0 0 0 0 0 0 0 200 0 0 0 0 0 0 0\n\
+             eth0: 300 0 0 0 0 0 0 0 400 0 0 0 0 0 0 0\n\
+             wlan0: 500 0 0 0 0 0 0 0 600 0 0 0 0 0 0 0",
+        );
+
+        assert_eq!(stats.net_rx, 800);
+        assert_eq!(stats.net_tx, 1_000);
+    }
+
+    #[test]
+    fn parse_processes_and_failed_units_drop_empty_lines() {
+        let mut stats = HostStats::default();
+        stats.parse_processes("PID USER\n123 root top\n\n456 admin sshd");
+        stats.parse_failed_units("foo.service\n\n bar.service \n");
+
+        assert_eq!(
+            stats.processes,
+            vec![
+                "PID USER".to_string(),
+                "123 root top".to_string(),
+                "456 admin sshd".to_string()
+            ]
+        );
+        assert_eq!(
+            stats.failed_units,
+            vec!["foo.service".to_string(), "bar.service".to_string()]
+        );
+    }
+}

@@ -12,36 +12,32 @@ use tokio::{
     time::{interval, timeout},
 };
 
+use crate::HostConfig;
 use crate::remote::host_stats::HostStats;
 
-pub use model::{App, AppAction, ConnectionStatus, HostState};
+pub use model::{App, AppAction, ConnectionStatus, DisplayMode, HostState};
 
 const INTERVAL: u64 = 2;
 const MAX_HISTORY: usize = 200;
 
 impl App {
     pub fn new(hosts: Vec<crate::HostConfig>) -> Self {
-        let current_user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
         Self {
             running: true,
             hosts: hosts
                 .into_iter()
-                .map(|config| {
-                    let user = config.user.as_deref().unwrap_or(&current_user);
-                    let port = config.port.unwrap_or(22);
-                    HostState {
-                        name: format!("{}@{}:{}", user, config.address, port),
-                        config: Some(config),
-                        connection_status: ConnectionStatus::Connecting,
-                        ..Default::default()
-                    }
+                .map(|config| HostState {
+                    name: config.address.clone(),
+                    config: Some(config),
+                    connection_status: ConnectionStatus::Connecting,
+                    ..Default::default()
                 })
                 .collect(),
             ..Default::default()
         }
     }
 
-    pub async fn start(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(&mut self) -> Result<Option<HostConfig>, Box<dyn Error>> {
         color_eyre::install()?;
         let terminal = ratatui::init();
 
@@ -55,7 +51,9 @@ impl App {
         ratatui::restore();
         self.shutdown(&mut background_tasks).await;
 
-        res
+        res?;
+
+        Ok(self.pending_ssh_host.clone())
     }
 
     async fn run(
